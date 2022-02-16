@@ -1,0 +1,7 @@
+{
+	"soil_loc" : "../soil-modelling",
+	"project_loc" : "G:/Shared drives/Climate Farmers/02_Product/01_02_Transition_Finance/Carbon_Credits/FarmerData",
+	"project_name" : "Test",
+	"lca_loc" : "../farmer-lca",
+	"data_loc" : "../modelling-data"
+}
