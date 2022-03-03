@@ -47,11 +47,21 @@ n2o_n_fixing_species <- function(
   
   if(nrow(n_fixing_species) > 0){
     n_fixing_species <- n_fixing_species %>% 
-      mutate(frac_removed = 1-residue,
-             agr = yield_t_ha * dry * r_ag_t,
-             bgr = (yield_t_ha * dry + agr) * rs_t *field_area * (1 / replanting_freq),
-             n2o_n_fixing = ((agr*n_ag*(1-frac_removed - (frac_burnt * cf))) + (bgr * n_bg))* ef_n * (44/28) * 1000  # 1000 converts t to kg
-      )  %>% select(-frac_removed, -agr, -bgr) 
+      mutate(agr= ifelse(is.na(dry_residue)==FALSE, dry_residue*dry_c,
+                                   ifelse(is.na(fresh_residue)==FALSE, fresh_residue*dry*dry_c,
+                                          ifelse(is.na(dry_residue)==TRUE & is.na(fresh_residue)==TRUE & is.na(residue_frac)==TRUE,NA,
+                                                 ifelse(is.na(dry_yield)==FALSE, dry_yield*dry_c*residue_frac,
+                                                        ifelse(is.na(fresh_yield)==FALSE, fresh_yield*dry*dry_c*residue_frac,
+                                                               ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*dry_c*residue_frac,
+                                                                      NA)))))),
+             bgr= ifelse(is.na(dry_residue)==FALSE & is.na(dry_yield)==FALSE, (dry_yield+dry_residue)*dry_c*r_s_ratio,
+                                  ifelse(is.na(fresh_residue)==FALSE & is.na(fresh_yield)==FALSE, (fresh_yield+fresh_residue)*dry*dry_c*r_s_ratio,
+                                         ifelse(is.na(residue_frac)==TRUE,NA,
+                                                ifelse(is.na(dry_yield)==FALSE, dry_yield/(1-residue_frac)*dry_c*r_s_ratio,
+                                                       ifelse(is.na(fresh_yield)==FALSE, fresh_yield/(1-residue_frac)*dry*dry_c*residue_frac*r_s_ratio,
+                                                              ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*dry_c*r_s_ratio,
+                                                                     NA)))))),
+             n2o_n_fixing = (area *(agr*n_ag*(1-residue_frac - (frac_burnt * cf))) + (bgr * n_bg))* ef_n * (44/28) * 1000)  # 1000 converts t to kg)
   }else{
     warning("No n-fixing species data provided - or included in project")
   }
@@ -61,8 +71,7 @@ n2o_n_fixing_species <- function(
 
 n2o_fertilizer <- function(
   fertilizer_data,
-  ef_fertilizer = 0.01,
-  field_area = 50
+  ef_fertilizer = 0.011
 ){
   
   if(nrow(fertilizer_data) > 0){
@@ -75,15 +84,39 @@ n2o_fertilizer <- function(
   
 }
 
-n2o_urine_dung <- function(
+n2o_manure_deposition_indirect <- function(
   animal_data,
   frac_gasm = 0.21,
-  ef_4 = 0.01
+  frac_leach = 0.24,
+  ef_4 = 0.01,
+  ef_5 = 0.011,
+  climate_wet_or_dry
 ){
+  if (climate_wet_or_dry == "wet"){ef_4=0.014}
+  if (climate_wet_or_dry == "dry"){ef_4=0.005}
   
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(n2o_urine_dung = n_animals * grazing_days/365 * n_excretion_rate_kg_1000am * 365 * mass/1000 * frac_gasm * ef_4)
+      mutate(n2o_urine_dung_indirect = n_animals * grazing_days/365 * n_excretion_rate_kg_1000am * 365 * mass/1000 * 
+               (frac_gasm * ef_4 + frac_leach * ef_5))
+  }else{
+    warning("No Animal data provided - or included in project")
+  }
+  return(animal_data)
+}
+
+n2o_manure_deposition_direct <- function(
+  animal_data,
+  ef_3_pasture = 0.004,
+  ef_3_deep_bedding=0.01,
+  climate_wet_or_dry
+){
+  if (climate_wet_or_dry == "wet"){ef_3_pasture=0.006}
+  if (climate_wet_or_dry == "dry"){ef_3_pasture=0.002}
+  if(nrow(animal_data) > 0){
+    animal_data <- animal_data %>% 
+      mutate(n2o_urine_dung_direct = n_animals * n_excretion_rate_kg_1000am * mass/1000 * 
+               (grazing_days * ef_3_pasture + (365 - grazing_days)*ef_3_deep_bedding))
   }else{
     warning("No Animal data provided - or included in project")
   }
