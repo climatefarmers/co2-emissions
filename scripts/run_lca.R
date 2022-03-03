@@ -2,19 +2,19 @@
 
 
 run_lca <- function(inputs_loc,
-                    lca_loc,
+                    co2_emissions_loc,
                     results_loc, 
                     data_loc
 ){
   
-  source(file.path(lca_loc, "scripts", "calc_functions.R"))
-  source(file.path(lca_loc, "scripts", "results_functions.R"))
-  source(file.path(lca_loc, "scripts", "agroforestry_functions.R"))
-  source(file.path(lca_loc, "scripts", "leakage_functions.R"))
-  source(file.path(lca_loc, "scripts", "test_functions.R"))
+  source(file.path(co2_emissions_loc, "scripts", "calc_functions.R"))
+  source(file.path(co2_emissions_loc, "scripts", "results_functions.R"))
+  source(file.path(co2_emissions_loc, "scripts", "agroforestry_functions.R"))
+  source(file.path(co2_emissions_loc, "scripts", "leakage_functions.R"))
+  source(file.path(co2_emissions_loc, "scripts", "test_functions.R"))
   
   input_files <- list.files(inputs_loc)
-  required_inputs <- c("additional_manure_inputs.csv","agroforestry_inputs.csv","animal_inputs.csv","bare_field_inputs.csv","barrier_analysis.txt","crop_inputs.csv","farm_details.json","fertilizer_inputs.csv","field_inputs.csv","fuel_inputs.csv")
+  required_inputs <- c("additional_manure_inputs.csv","agroforestry_inputs.csv","animal_inputs.csv","bare_field_inputs.csv","barrier_analysis.txt","crop_inputs.csv","farm_details.json","fertilizer_inputs.csv","field_inputs.csv","fuel_inputs.csv","pasture_inputs.csv", "parcel_inputs.csv")
   if( length(setdiff(input_files, required_inputs)) > 0){stop(paste0("Missing inputs files. The missing files include: ", setdiff(input_files, required_inputs)))}
   
   animal_data <- read_csv(file.path(inputs_loc, "animal_inputs.csv")) %>% filter(!is.na(species))
@@ -24,9 +24,12 @@ run_lca <- function(inputs_loc,
   fertilizer_data <- read_csv(file.path(inputs_loc, "fertilizer_inputs.csv"))
   fuel_data <- read_csv(file.path(inputs_loc, "fuel_inputs.csv"))
   add_manure_data <- read_csv(file.path(inputs_loc, "additional_manure_inputs.csv"))
-  
+  parcel_data <- read_csv(file.path(inputs_loc, "parcel_inputs.csv"))
   
   climate_zone <- unique(field_data$climate_zone)
+  if(length(climate_zone) > 1){stop("Climate Zones not unique")}
+  
+  climate_wet_or_dry <- unique(field_data$climate_wet_or_dry)
   if(length(climate_zone) > 1){stop("Climate Zones not unique")}
   
   field_area <- unique(field_data$hectares)
@@ -51,24 +54,22 @@ run_lca <- function(inputs_loc,
   check_manure_data(add_manure_data, manure_factors)  
   
   # merge in factors into lca data
-  animal_data <- left_join(animal_data, animal_factors, by = "species")
+  animal_data <- left_join(filter(animal_data, scenario=="current"), animal_factors, by = "species")
   animal_data <- left_join(animal_data, methane_factors, by = c("species" = "species", "grazing_management" = "grazing_management", "productivity" = "productivity"))
-  n_fixing_species <- left_join(crop_data, crop_factors, by = "crop")
-  fertilizer_data <- left_join(fertilizer_data, fertilizer_factors, by = "fertilizer_type")
-  fuel_data <- left_join(fuel_data, fuel_factors, by = "fuel_type")
-  add_manure_data <- left_join(add_manure_data, manure_factors, by = "manure_source")
-  
+  n_fixing_species <- left_join(filter(crop_data, scenario=="current"), crop_factors, by = "crop")
+  n_fixing_species <- left_join(n_fixing_species, parcel_data, by = "parcel_ID")
+  fertilizer_data <- left_join(filter(fertilizer_data, scenario=="current"), fertilizer_factors, by = "fertilizer_type")
+  fuel_data <- left_join(filter(fuel_data, scenario=="current"), fuel_factors, by = "fuel_type")
+  add_manure_data <- left_join(filter(add_manure_data, scenario=="current"), manure_factors, by = "manure_source")
   # Run through calculations
   
   fertilizer_data <- n2o_fertilizer(fertilizer_data,
-                                    ef_fertilizer = 0.01, 
-                                    field_area = field_area) 
+                                    ef_fertilizer = 0.01) 
   
   animal_data <- ch4_enteric_fermentation(animal_data)
   
-  animal_data <- n2o_urine_dung(animal_data,
-                                frac_gasm = 0.21,
-                                ef_4 = 0.01)
+  animal_data <- n2o_manure_deposition_direct(animal_data, climate_wet_or_dry=climate_wet_or_dry)
+  animal_data <- n2o_manure_deposition_indirect(animal_data, climate_wet_or_dry=climate_wet_or_dry)
   
   animal_data <- ch4_manure_deposition(animal_data)
   
@@ -87,8 +88,8 @@ run_lca <- function(inputs_loc,
   if (nrow(fertilizer_data) > 0){fertilizer_results <- fertilizer_data %>% select(fertilizer_type, n2o_fertilizer)}else{
     fertilizer_results <- create_empty_dataframe(c("fertilizer_type", "n2o_fertilizer"))
   }
-  if (nrow(animal_data) > 0){  animal_results <- animal_data %>% select(species, ch4_manure_dep, ch4_ent_ferm, n2o_urine_dung)}else{
-    animal_results <- create_empty_dataframe(c("species", "ch4_manure_dep", "ch4_ent_ferm", "n2o_urine_dung"))
+  if (nrow(animal_data) > 0){  animal_results <- animal_data %>% select(species, ch4_manure_dep, ch4_ent_ferm, n2o_urine_dung_indirect, n2o_urine_dung_direct)}else{
+    animal_results <- create_empty_dataframe(c("species", "ch4_manure_dep", "ch4_ent_ferm", "n2o_urine_dung_indirect", "n2o_urine_dung_direct"))
   }
   if (nrow(fuel_data) > 0){  fuel_results <- fuel_data %>% select(fuel_type, co2_fuel)}else{
     fuel_results <- create_empty_dataframe(c("fuel_type", "co2_fuel"))
@@ -102,7 +103,7 @@ run_lca <- function(inputs_loc,
   fertilizer_results_sum <- fertilizer_results %>% summarise(n2o_fertilizer = sum(n2o_fertilizer))
   animal_results_sum <- animal_results %>% summarise(ch4_manure_dep = sum(ch4_manure_dep),
                                                      ch4_ent_ferm = sum(ch4_ent_ferm),
-                                                     n2o_urine_dung = sum(n2o_urine_dung))
+                                                     n2o_manure_deposition = sum(n2o_urine_dung_indirect)+sum(n2o_urine_dung_direct))
   fuel_results_sum <- fuel_results %>% summarise(co2_fuel = sum(co2_fuel))
   crop_results_sum <- crop_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
   
@@ -123,7 +124,7 @@ run_lca <- function(inputs_loc,
     summarise(co2eq = sum(co2eq), .groups = "drop")
   
   
-  plot_source_breakdown(all_results %>%  filter(source != "leakage"), results_loc)
+  plot_source_breakdown(all_results , results_loc)#%>%  filter(source != "leakage")
   write_csv(gas_summary, file.path(results_loc, "lca_results.csv"))
   write_csv(all_results, file.path(results_loc, "lca_results_source.csv"))
   
