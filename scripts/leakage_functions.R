@@ -7,8 +7,10 @@ manure_leakage <- function(add_manure_data, field_area = 50){
   
   if(nrow(add_manure_data) > 0){
   add_manure_data <- add_manure_data %>% 
-    mutate(co2_leakage = quantity_kg_ha * field_area * carbon_content * .12 * (44/12)) %>% 
-    select(manure_source, co2_leakage)}else{
+    mutate(co2_leakage = quantity_kg_ha * area * carbon_content * .12 * (44/12)) %>% 
+    select(manure_source, co2_leakage)
+  }
+  else{
       add_manure_data <- create_empty_dataframe(c("manure_source", "co2_leakage"))
       warning("No additional manure data provided")
     }

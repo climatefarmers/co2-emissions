@@ -47,21 +47,21 @@ n2o_n_fixing_species <- function(
   
   if(nrow(n_fixing_species) > 0){
     n_fixing_species <- n_fixing_species %>% 
-      mutate(agr= ifelse(is.na(dry_residue)==FALSE, dry_residue*dry_c,
-                                   ifelse(is.na(fresh_residue)==FALSE, fresh_residue*dry*dry_c,
-                                          ifelse(is.na(dry_residue)==TRUE & is.na(fresh_residue)==TRUE & is.na(residue_frac)==TRUE,NA,
-                                                 ifelse(is.na(dry_yield)==FALSE, dry_yield*dry_c*residue_frac,
-                                                        ifelse(is.na(fresh_yield)==FALSE, fresh_yield*dry*dry_c*residue_frac,
-                                                               ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*dry_c*residue_frac,
-                                                                      NA)))))),
-             bgr= ifelse(is.na(dry_residue)==FALSE & is.na(dry_yield)==FALSE, (dry_yield+dry_residue)*dry_c*r_s_ratio,
-                                  ifelse(is.na(fresh_residue)==FALSE & is.na(fresh_yield)==FALSE, (fresh_yield+fresh_residue)*dry*dry_c*r_s_ratio,
-                                         ifelse(is.na(residue_frac)==TRUE,NA,
-                                                ifelse(is.na(dry_yield)==FALSE, dry_yield/(1-residue_frac)*dry_c*r_s_ratio,
-                                                       ifelse(is.na(fresh_yield)==FALSE, fresh_yield/(1-residue_frac)*dry*dry_c*residue_frac*r_s_ratio,
-                                                              ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*dry_c*r_s_ratio,
-                                                                     NA)))))),
-             n2o_n_fixing = (area *(agr*n_ag*(1-residue_frac - (frac_burnt * cf))) + (bgr * n_bg))* ef_n * (44/28) * 1000)  # 1000 converts t to kg)
+      mutate(agr= ifelse(is.na(dry_residue)==FALSE, dry_residue,
+                         ifelse(is.na(fresh_residue)==FALSE, fresh_residue*dry,
+                                ifelse(is.na(dry_residue)==TRUE & is.na(fresh_residue)==TRUE & is.na(residue_frac)==TRUE,NA,
+                                       ifelse(is.na(dry_yield)==FALSE, dry_yield*residue_frac,
+                                              ifelse(is.na(fresh_yield)==FALSE, fresh_yield*dry*residue_frac,
+                                                     ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*residue_frac,
+                                                            NA)))))),
+             bgr= ifelse(is.na(dry_residue)==FALSE & is.na(dry_yield)==FALSE, (dry_yield+dry_residue)*r_s_ratio,
+                         ifelse(is.na(fresh_residue)==FALSE & is.na(fresh_yield)==FALSE, (fresh_yield+fresh_residue)*dry*r_s_ratio,
+                                ifelse(is.na(residue_frac)==TRUE,NA,
+                                       ifelse(is.na(dry_yield)==FALSE, dry_yield/(1-residue_frac)*r_s_ratio,
+                                              ifelse(is.na(fresh_yield)==FALSE, fresh_yield/(1-residue_frac)*dry*residue_frac*r_s_ratio,
+                                                     ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*r_s_ratio,
+                                                            NA)))))),
+             n2o_n_fixing = (area *(agr * n_ag + bgr * n_bg))* ef_n * (44/28) * 1000)  # 1000 converts t to kg)
   }else{
     warning("No n-fixing species data provided - or included in project")
   }
