@@ -1,10 +1,14 @@
 #main in function form
 
+#### TO DO: fix n2o_n_fixing & leakage functions so that it is calc and displayed
+#### TO DO: include pastures and compst ?? to n2o_n_fixing
+#### TO DO LATER: include n2o_n_fixing & compost import to leakage
 
 run_lca <- function(inputs_loc,
                     co2_emissions_loc,
                     results_loc, 
-                    data_loc
+                    data_loc,
+                    scenario_selected
 ){
   
   source(file.path(co2_emissions_loc, "scripts", "calc_functions.R"))
@@ -14,10 +18,10 @@ run_lca <- function(inputs_loc,
   source(file.path(co2_emissions_loc, "scripts", "test_functions.R"))
   
   input_files <- list.files(inputs_loc)
-  required_inputs <- c("additional_manure_inputs.csv","agroforestry_inputs.csv","animal_inputs.csv","bare_field_inputs.csv","barrier_analysis.txt","crop_inputs.csv","farm_details.json","fertilizer_inputs.csv","field_inputs.csv","fuel_inputs.csv","pasture_inputs.csv", "parcel_inputs.csv")
+  required_inputs <- c("additional_manure_inputs.csv","agroforestry_inputs.csv","animal_inputs.csv","animal_summary.csv","bare_field_inputs.csv","barrier_analysis.txt","crop_inputs.csv","farm_details.json","fertilizer_inputs.csv","field_inputs.csv","fuel_inputs.csv","pasture_inputs.csv", "parcel_inputs.csv")
   if( length(setdiff(input_files, required_inputs)) > 0){stop(paste0("Missing inputs files. The missing files include: ", setdiff(input_files, required_inputs)))}
   
-  animal_data <- read_csv(file.path(inputs_loc, "animal_inputs.csv")) %>% filter(!is.na(species))
+  animal_data <- read_csv(file.path(inputs_loc, "animal_summary.csv")) %>% filter(!is.na(species))
   crop_data <- read_csv(file.path(inputs_loc, "crop_inputs.csv"))  
   tree_data <- read_csv(file.path(inputs_loc, "agroforestry_inputs.csv"))  
   field_data <- read_csv(file.path(inputs_loc, "field_inputs.csv"))
@@ -44,7 +48,7 @@ run_lca <- function(inputs_loc,
   fuel_factors <- read_csv(file.path(data_loc, "data", "fuel_factors.csv"))
   co2eq_factors <- read_csv(file.path(data_loc, "data", "co2eq_factors.csv"))
   tree_factors <- read_csv(file.path(data_loc, "data", "agroforestry_factors.csv"))
-  manure_factors <- read_csv(file.path(data_loc, "data", "carbon_share_manure.csv"))
+  manure_factors <- read_csv(file.path(data_loc, "data", "carbon_share_manure.csv")) #%>% filter(type=='manure')
   
   # Check input data for validity
   check_animal_data(animal_data, animal_factors)
@@ -54,13 +58,13 @@ run_lca <- function(inputs_loc,
   check_manure_data(add_manure_data, manure_factors)  
   
   # merge in factors into lca data
-  animal_data <- left_join(filter(animal_data, scenario=="current"), animal_factors, by = "species")
+  animal_data <- left_join(filter(animal_data, scenario==scenario_selected), animal_factors, by = "species")
   animal_data <- left_join(animal_data, methane_factors, by = c("species" = "species", "grazing_management" = "grazing_management", "productivity" = "productivity"))
-  n_fixing_species <- left_join(filter(crop_data, scenario=="current"), crop_factors, by = "crop")
+  n_fixing_species <- left_join(filter(crop_data, scenario==scenario_selected), crop_factors, by = "crop")
   n_fixing_species <- left_join(n_fixing_species, parcel_data, by = "parcel_ID")
-  fertilizer_data <- left_join(filter(fertilizer_data, scenario=="current"), fertilizer_factors, by = "fertilizer_type")
-  fuel_data <- left_join(filter(fuel_data, scenario=="current"), fuel_factors, by = "fuel_type")
-  add_manure_data <- left_join(filter(add_manure_data, scenario=="current"), manure_factors, by = "manure_source")
+  fertilizer_data <- left_join(filter(fertilizer_data, scenario==scenario_selected), fertilizer_factors, by = "fertilizer_type")
+  fuel_data <- left_join(filter(fuel_data, scenario==scenario_selected), fuel_factors, by = "fuel_type")
+  add_manure_data <- left_join(filter(add_manure_data, scenario==scenario_selected), manure_factors, by = "manure_source")
   # Run through calculations
   
   fertilizer_data <- n2o_fertilizer(fertilizer_data,
@@ -81,7 +85,7 @@ run_lca <- function(inputs_loc,
   
   # add leakage calculations
   
-  leakage <- manure_leakage(add_manure_data, field_area = field_area)
+  leakage <- manure_leakage(add_manure_data)
   
   # Clean Results 
   
@@ -119,14 +123,7 @@ run_lca <- function(inputs_loc,
     left_join(co2eq_factors, by = "gas") %>% 
     mutate(co2eq = co2eq_factor * value)
   
-  gas_summary <- all_results %>% 
-    group_by(gas) %>% 
-    summarise(co2eq = sum(co2eq), .groups = "drop")
-  
-  
-  plot_source_breakdown(all_results , results_loc)#%>%  filter(source != "leakage")
-  write_csv(gas_summary, file.path(results_loc, "lca_results.csv"))
-  write_csv(all_results, file.path(results_loc, "lca_results_source.csv"))
+  return(all_results)
   
 }
 
