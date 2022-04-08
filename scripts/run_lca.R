@@ -65,6 +65,7 @@ run_lca <- function(inputs_loc,
   fertilizer_data <- left_join(filter(fertilizer_data, scenario==scenario_selected), fertilizer_factors, by = "fertilizer_type")
   fuel_data <- left_join(filter(fuel_data, scenario==scenario_selected), fuel_factors, by = "fuel_type")
   add_manure_data <- left_join(filter(add_manure_data, scenario==scenario_selected), manure_factors, by = "manure_source")
+  add_manure_data <- left_join(filter(add_manure_data, scenario==scenario_selected), parcel_data, by = "parcel_ID")
   # Run through calculations
   
   fertilizer_data <- n2o_fertilizer(fertilizer_data,

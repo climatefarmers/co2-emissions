@@ -25,7 +25,7 @@ if(!dir.exists(inputs_loc)){dir.create(inputs_loc)}
 data_loc <- file.path(parameters$data_loc)
 co2_emissions_loc <- working_dir
 
-scenario_selected = "previous_year"
+scenario_selected = "previous_years"
 all_results_previous_year <- run_lca(inputs_loc,
         co2_emissions_loc,
         results_loc,
