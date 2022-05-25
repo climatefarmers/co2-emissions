@@ -18,7 +18,7 @@ ch4_enteric_fermentation <- function(
 ){
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(ch4_ent_ferm = n_animals * (grazing_days / 365) * ef_enteric_fermentation_kg_head)
+      mutate(ch4_ent_ferm = n_animals * (grazing_days / 365) * ef_enteric_fermentation_kg_head) # add non-grazing days
   }else{
     warning("No animal data provided - or included in project")
   }
@@ -31,7 +31,7 @@ ch4_manure_deposition <- function(
 ){
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(ch4_manure_dep = n_animals * grazing_days/365 * ef_methane_kg_head)
+      mutate(ch4_manure_dep = n_animals * grazing_days/365 * ef_methane_kg_head) # add non-grazing days
   }else{
     warning("No animal data provided - or included in project")
   }
@@ -39,14 +39,13 @@ ch4_manure_deposition <- function(
   
 }
 
-n2o_n_fixing_species <- function(
+n2o_n_fixing_species_crop <- function(
   n_fixing_species,
   ef_n = 0.01,
-  field_area = 50
+  field_area = NA
 ){
-  
-  if(nrow(n_fixing_species) > 0){
-    n_fixing_species <- n_fixing_species %>% 
+  if(nrow(n_fixing_species_crop) > 0){ # add pastures and update the crop residue calc function
+    n_fixing_species_crop <- n_fixing_species_crop %>% 
       mutate(agr= ifelse(is.na(dry_residue)==FALSE, dry_residue,
                          ifelse(is.na(fresh_residue)==FALSE, fresh_residue*dry,
                                 ifelse(is.na(dry_residue)==TRUE & is.na(fresh_residue)==TRUE & is.na(residue_frac)==TRUE,NA,
@@ -61,13 +60,36 @@ n2o_n_fixing_species <- function(
                                               ifelse(is.na(fresh_yield)==FALSE, fresh_yield/(1-residue_frac)*dry*residue_frac*r_s_ratio,
                                                      ifelse(is.na(ag_dm_peak)==FALSE, ag_dm_peak*r_s_ratio,
                                                             NA)))))),
-             n2o_n_fixing = (area *(agr * n_ag + bgr * n_bg))* ef_n * (44/28) * 1000)  # 1000 converts t to kg)
+             n2o_n_fixing = (area * n_fixing_frac *(agr * n_ag + bgr * n_bg))* ef_n * (44/28) * 1000)  # 1000 converts t to kg
   }else{
-    warning("No n-fixing species data provided - or included in project")
+    warning("No n-fixing crop species data provided - or included in project")
   }
   
-  return(n_fixing_species)
+  return(n_fixing_species_crop)
 }
+
+n2o_n_fixing_species_pasture <- function(
+  n_fixing_species_pasture,
+  ef_n = 0.01,
+  field_area = NA
+){
+  if(nrow(n_fixing_species_pasture) > 0){
+    annual_pastures <- filter(n_fixing_species_pasture, pasture_type=="annual") %>% 
+      mutate(n_input_shoot= (fresh_residual+fresh_yield*0.15)*pasture_efficiency*dry*n_ag) %>%
+      mutate(n_input_root= pasture_efficiency*ag_fresh_peak*dry*r_s_ratio*n_bg*bg_turnover) %>%
+      mutate(n2o_n_fixing = area * (n_input_shoot + n_input_root)*n_fixing_frac*(1-perennial_frac)* ef_n * (44/28) * 1000)
+    perennial_pastures <- filter(n_fixing_species_pasture, pasture_type=="perennial") %>% 
+      mutate(n_input_shoot= (fresh_yield*0.15+pasture_efficiency*ag_fresh_peak*ag_turnover)*dry*n_ag) %>%
+      mutate(n_input_root= pasture_efficiency*ag_fresh_peak*dry*r_s_ratio*n_bg*bg_turnover) %>%
+      mutate(n2o_n_fixing = area * (n_input_shoot + n_input_root)*n_fixing_frac*perennial_frac* ef_n * (44/28) * 1000)
+    n_fixing_species_pasture = rbind(annual_pastures,perennial_pastures)
+  }else{
+  warning("No n-fixing pasture species data provided - or included in project")
+  }
+  return(n_fixing_species_pasture)
+}
+
+
 
 n2o_fertilizer <- function(
   fertilizer_data,
@@ -84,7 +106,7 @@ n2o_fertilizer <- function(
   
 }
 
-n2o_manure_deposition_indirect <- function(
+n2o_manure_deposition_indirect <- function( # add non-grazing days
   animal_data,
   frac_gasm = 0.21,
   frac_leach = 0.24,
