@@ -29,6 +29,7 @@ run_lca <- function(inputs_loc,
   fuel_data <- read_csv(file.path(inputs_loc, "fuel_inputs.csv"))
   add_manure_data <- read_csv(file.path(inputs_loc, "additional_manure_inputs.csv"))
   parcel_data <- read_csv(file.path(inputs_loc, "parcel_inputs.csv"))
+  pasture_data <- read_csv(file.path(inputs_loc, "pasture_inputs.csv"))
   
   climate_zone <- unique(field_data$climate_zone)
   if(length(climate_zone) > 1){stop("Climate Zones not unique")}
@@ -48,7 +49,8 @@ run_lca <- function(inputs_loc,
   fuel_factors <- read_csv(file.path(data_loc, "data", "fuel_factors.csv"))
   co2eq_factors <- read_csv(file.path(data_loc, "data", "co2eq_factors.csv"))
   tree_factors <- read_csv(file.path(data_loc, "data", "agroforestry_factors.csv"))
-  manure_factors <- read_csv(file.path(data_loc, "data", "carbon_share_manure.csv")) #%>% filter(type=='manure')
+  manure_factors <- read_csv(file.path(data_loc, "data", "carbon_share_manure.csv"))
+  pasture_factors <- read_csv(file.path(data_loc, "data", "pasture_factors.csv"))
   
   # Check input data for validity
   check_animal_data(animal_data, animal_factors)
@@ -60,8 +62,10 @@ run_lca <- function(inputs_loc,
   # merge in factors into lca data
   animal_data <- left_join(filter(animal_data, scenario==scenario_selected), animal_factors, by = "species")
   animal_data <- left_join(animal_data, methane_factors, by = c("species" = "species", "grazing_management" = "grazing_management", "productivity" = "productivity"))
-  n_fixing_species <- left_join(filter(crop_data, scenario==scenario_selected), crop_factors, by = "crop")
-  n_fixing_species <- left_join(n_fixing_species, parcel_data, by = "parcel_ID")
+  n_fixing_species_crop <- left_join(filter(crop_data, scenario==scenario_selected), crop_factors, by = "crop")
+  n_fixing_species_crop <- left_join(n_fixing_species_crop, parcel_data, by = "parcel_ID")
+  n_fixing_species_pasture <- left_join(filter(pasture_data, scenario==scenario_selected), pasture_factors, by = "grass")
+  n_fixing_species_pasture <- left_join(n_fixing_species_pasture, parcel_data, by = "parcel_ID")
   fertilizer_data <- left_join(filter(fertilizer_data, scenario==scenario_selected), fertilizer_factors, by = "fertilizer_type")
   fuel_data <- left_join(filter(fuel_data, scenario==scenario_selected), fuel_factors, by = "fuel_type")
   add_manure_data <- left_join(filter(add_manure_data, scenario==scenario_selected), manure_factors, by = "manure_source")
@@ -78,8 +82,11 @@ run_lca <- function(inputs_loc,
   
   animal_data <- ch4_manure_deposition(animal_data)
   
-  n_fixing_species <- n2o_n_fixing_species(n_fixing_species, 
-                                           field_area = field_area)
+  n_fixing_species_crop <- n2o_n_fixing_species_crop(n_fixing_species_crop, 
+                                                field_area = field_area)
+  
+  n_fixing_species_pasture <- n2o_n_fixing_species_pasture(n_fixing_species_pasture, 
+                                                field_area = field_area)
   
   fuel_data <- co2_fuel_consumption(fuel_data)
   
@@ -99,8 +106,11 @@ run_lca <- function(inputs_loc,
   if (nrow(fuel_data) > 0){  fuel_results <- fuel_data %>% select(fuel_type, co2_fuel)}else{
     fuel_results <- create_empty_dataframe(c("fuel_type", "co2_fuel"))
   }
-  if (nrow(n_fixing_species) > 0){crop_results <- n_fixing_species %>% select(crop, n2o_n_fixing)}else{
+  if (nrow(n_fixing_species_crop) > 0){crop_results <- n_fixing_species_crop %>% select(crop, n2o_n_fixing)}else{
     crop_results <- create_empty_dataframe(c("crop", "n2o_n_fixing"))
+  }
+  if (nrow(n_fixing_species_pasture) > 0){pasture_results <- n_fixing_species_pasture %>% select(grass, n2o_n_fixing)}else{
+    pasture_results <- create_empty_dataframe(c("grass", "n2o_n_fixing"))
   }
   
   
@@ -110,13 +120,16 @@ run_lca <- function(inputs_loc,
                                                      ch4_ent_ferm = sum(ch4_ent_ferm),
                                                      n2o_manure_deposition = sum(n2o_urine_dung_indirect)+sum(n2o_urine_dung_direct))
   fuel_results_sum <- fuel_results %>% summarise(co2_fuel = sum(co2_fuel))
+  
   crop_results_sum <- crop_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
+  pasture_results_sum <- pasture_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
+  n_fixing_sum <- crop_results_sum + pasture_results_sum
   
   leakage_sum <- leakage %>% summarise(co2_leakage = sum(co2_leakage))
   
   # Summarise Results
   
-  all_results <- bind_rows(fertilizer_results_sum, animal_results_sum, fuel_results_sum, crop_results_sum, leakage_sum) %>% 
+  all_results <- bind_rows(fertilizer_results_sum, animal_results_sum, fuel_results_sum, n_fixing_sum, leakage_sum) %>% 
     pivot_longer(cols = everything(), names_to = "source") %>% 
     filter(!is.na(value)) %>% 
     mutate(gas = substr(source,1,3),
