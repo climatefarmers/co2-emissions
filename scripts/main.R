@@ -62,7 +62,8 @@ write_csv(all_results_previous_years, file.path(results_loc, "CO2eq_emissions_so
 
 all_results <- inner_join(all_results_previous_years, all_results_current, by="source") %>%
   mutate(co2eq_reductions=co2eq_previous_years-co2eq_current)%>%
-  mutate(reduction_or_increase=ifelse(co2eq_previous_years-co2eq_current>0,"reduction","increase"))
+  mutate(reduction_or_increase=ifelse(co2eq_previous_years-co2eq_current>0,"reduction",
+                                      ifelse(co2eq_previous_years-co2eq_current==0,"unchanged","increase")))
 
 write_csv(all_results, file.path(results_loc, "diff_btw_2021_2020.csv"))
 
