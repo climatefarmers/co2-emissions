@@ -40,7 +40,7 @@ ch4_manure_deposition <- function(
 }
 
 n2o_n_fixing_species_crop <- function(
-  n_fixing_species,
+  n_fixing_species_crop,
   ef_n = 0.01,
   field_area = NA
 ){
@@ -74,13 +74,23 @@ n2o_n_fixing_species_pasture <- function(
   field_area = NA
 ){
   if(nrow(n_fixing_species_pasture) > 0){
+    n_fixing_species_pasture <- n_fixing_species_pasture %>%
+      mutate(dry_residual = ifelse(is.na(dry_residual)==FALSE, dry_residual, 
+                                   ifelse(is.na(fresh_residual)==FALSE,fresh_residual*dry,
+                                          NA))) %>%
+      mutate(dry_yield = ifelse(is.na(dry_yield)==FALSE, dry_yield, 
+                                ifelse(is.na(fresh_yield)==FALSE,fresh_yield*dry,
+                                       NA))) %>%
+      mutate(ag_dry_peak = ifelse(is.na(ag_dry_peak)==FALSE, ag_dry_peak, 
+                                  ifelse(is.na(ag_fresh_peak)==FALSE,ag_fresh_peak*dry,
+                                         NA)))
     annual_pastures <- filter(n_fixing_species_pasture, pasture_type=="annual") %>% 
-      mutate(n_input_shoot= (fresh_residual+fresh_yield*0.15)*pasture_efficiency*dry*n_ag) %>%
-      mutate(n_input_root= pasture_efficiency*ag_fresh_peak*dry*r_s_ratio*n_bg*bg_turnover) %>%
+      mutate(n_input_shoot= (dry_residual+dry_yield*0.15)*pasture_efficiency*n_ag) %>%
+      mutate(n_input_root= pasture_efficiency*ag_dry_peak*r_s_ratio*n_bg*bg_turnover) %>%
       mutate(n2o_n_fixing = area * (n_input_shoot + n_input_root)*n_fixing_frac*(1-perennial_frac)* ef_n * (44/28) * 1000)
     perennial_pastures <- filter(n_fixing_species_pasture, pasture_type=="perennial") %>% 
-      mutate(n_input_shoot= (fresh_yield*0.15+pasture_efficiency*ag_fresh_peak*ag_turnover)*dry*n_ag) %>%
-      mutate(n_input_root= pasture_efficiency*ag_fresh_peak*dry*r_s_ratio*n_bg*bg_turnover) %>%
+      mutate(n_input_shoot= (dry_yield*0.15+pasture_efficiency*ag_dry_peak*ag_turnover)*n_ag) %>%
+      mutate(n_input_root= pasture_efficiency*ag_dry_peak*r_s_ratio*n_bg*bg_turnover) %>%
       mutate(n2o_n_fixing = area * (n_input_shoot + n_input_root)*n_fixing_frac*perennial_frac* ef_n * (44/28) * 1000)
     n_fixing_species_pasture = rbind(annual_pastures,perennial_pastures)
   }else{
