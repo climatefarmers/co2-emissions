@@ -5,11 +5,17 @@
 #### TO DO LATER: include n2o_n_fixing & compost import to leakage
 
 run_lca <- function(farmId, JSONfile){
+  
+  ## Log start running messages
   log4r::info(my_logger, "run_lca.R started running for all scenario.")
+  
+  ## Define paths
   soil_loc <-init_file$soil_loc
   co2_emissions_loc <-init_file$co2_emissions_loc
   modelling_data_loc <- init_file$modelling_data_loc
   climatic_zone_loc <- init_file$climatic_zone_loc
+  
+  ## Set environmental variables for AWS
   Sys.setenv(
     "AWS_ACCESS_KEY_ID" = init_file$AWS_ACCESS_KEY_ID,
     "AWS_SECRET_ACCESS_KEY" = init_file$AWS_SECRET_ACCESS_KEY,
@@ -92,7 +98,7 @@ run_lca <- function(farmId, JSONfile){
   } else if (length(unique(farm_EnZ$enz))>1){
     log4r::error(my_logger, paste("Caution: farmparameters collection content SEVERAL EnZ for farmId", farmId,"leading to conflicts", sep=" "))
   }
-  # Read in lca data
+  ## Read in lca data
   animal_factors <- read_csv(file.path(modelling_data_loc,"data", "carbon_share_manure.csv")) %>% filter(type=="manure") %>% 
     rename(species=manure_source)
   co2eq_factors <- read_csv(file.path(modelling_data_loc, "data", "co2eq_factors.csv"))
@@ -108,6 +114,8 @@ run_lca <- function(farmId, JSONfile){
   climate_wet_or_dry <- unique(natural_area_factors$climate_wet_or_dry)
   methane_factors <- read_csv(file.path(modelling_data_loc,"data", "methane_emission_factors.csv")) %>% filter(climate == climate_zone) %>% select(-climate)
   grazing_factors <- read_csv(file.path(modelling_data_loc,"data", "grazing_factors.csv"))
+  
+  ## Get inputs
   crop_data = get_crop_inputs(landUseSummaryOrPractices, pars)
   crop_data <- get_baseline_crop_inputs(landUseSummaryOrPractices, crop_data, crop_factors, my_logger, farm_EnZ)
   pasture_data <- get_pasture_inputs(landUseSummaryOrPractices, grazing_factors, farm_EnZ, total_grazing_table, my_logger, pars)
@@ -120,13 +128,16 @@ run_lca <- function(farmId, JSONfile){
   tree_data <- get_agroforestry_inputs(landUseSummaryOrPractices)
   animal_data <- get_animal_inputs(landUseSummaryOrPractices,livestock, parcel_data)
   
-  # Check input data for validity
+  ## Check input data for validity
   check_animal_data(animal_data, animal_factors)
   check_crop_data(crop_data, crop_factors)
   check_fertilizer_data(fertilizer_data, fertilizer_factors)
   check_fuel_data(fuel_data, fuel_factors)
   check_manure_data(add_manure_data, manure_factors)  
   
+
+  ## Calculation of yearly results
+  # Preparation of data frames
   CO2emissions_detailled_yearly_results = data.frame(scenario_selected = c(), source = c(), value = c(), 
                               gas = c(), co2eq_factor = c(), kgCO2_eq = c())
   productivity_table = data.frame(year = c(), crop = c(), productivity = c())

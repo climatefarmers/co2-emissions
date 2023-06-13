@@ -1,5 +1,6 @@
 # Initial calculations all in kg -> convert to tonnes later
 
+## Calculation: co2 fuel consumption
 co2_fuel_consumption <- function(
   fuel_data
 ){
@@ -13,6 +14,7 @@ co2_fuel_consumption <- function(
   
 }
 
+## Calculation: ch4 enteric fermentation
 ch4_enteric_fermentation <- function(
   animal_data
 ){
@@ -108,7 +110,7 @@ n2o_fertilizer <- function(
   
   if(nrow(fertilizer_data) > 0){
     fertilizer_data <- fertilizer_data %>% 
-      mutate(n2o_fertilizer = quantity_t_ha*1e3 * field_area * n_content_perc/100 * (1 - volatile_fraction) * ef_fertilizer * (44/28))
+      mutate(n2o_fertilizer = quantity_t_ha*1e3 *  n_content_perc/100 * (1 - volatile_fraction) * ef_fertilizer * (44/28))
   }else{
     warning("No Fertilizer data provided - or included in project")
   }
