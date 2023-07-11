@@ -4,7 +4,9 @@
 #### TO DO: include pastures and compst ?? to n2o_n_fixing
 #### TO DO LATER: include n2o_n_fixing & compost import to leakage
 
-run_lca <- function(init_file, farmId=NA, JSONfile=NA){
+run_lca <- function(init_file, farm_everything, farm_EnZ){
+  ## This life cycle analysis function for getting the farm emissions
+  ## is meant to be called by passing it the init_file and farm data directly.
   
   ## Log start running messages
   log4r::info(my_logger, "run_lca.R started running for all scenario.")
@@ -14,43 +16,14 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
   co2_emissions_loc <-init_file$co2_emissions_loc
   modelling_data_loc <- init_file$modelling_data_loc
   climatic_zone_loc <- init_file$climatic_zone_loc
-  
-  ## Set environmental variables for AWS
-  Sys.setenv(
-    "AWS_ACCESS_KEY_ID" = init_file$AWS_ACCESS_KEY_ID,
-    "AWS_SECRET_ACCESS_KEY" = init_file$AWS_SECRET_ACCESS_KEY,
-    "AWS_DEFAULT_REGION" = init_file$AWS_DEFAULT_REGION
-  )
-  if(is.na(farmId)==TRUE){
-    if(is.na(JSONfile)==TRUE){stop("No farmId neither JSON files were feed to the model")}
-    JSONfile_entered = TRUE
-    farms_everything = fromJSON(JSONfile)
-  }
-  if(is.na(farmId)==FALSE){
-    if(is.na(JSONfile)==FALSE){stop("farmId AND JSON files were feed to the model. Please choose only one.")}
-    #connection_string = init_file$connection_string_prod
-    #farms_collection = mongo(collection="farms", db="carbonplus_production_db", url=init_file$connection_string_prod)
-    farms_collection = mongo(collection="farms", db="carbonplusdb", url=init_file$connection_string_cfdev)
-    farms_everything = farms_collection$find(paste('{"farmInfo.farmId":"',farmId,'"}',sep=""))
-    #checking correctness and unicity
-    if (is.null(farms_everything$farmInfo)==TRUE){
-      log4r::error(my_logger, "farmId wasn't found.")
-    } else if (length(farms_everything$farmInfo$farmId)>1){
-      log4r::error(my_logger, paste("Multiple identical farmId were found. Number of farmId matching =",length(farms_everything$farmInfo$farmId),".",sep=""))
-    } else if (farms_everything$farmInfo$farmId==farmId){
-      log4r::info(my_logger,paste("farm with farmId = ",farmId," has been read succesfully. Mail adress = ",farms_everything$farmInfo$email,'.',sep=""))
-    }
-  }
+
   source(file.path(co2_emissions_loc, "scripts", "calc_functions.R"))
   source(file.path(co2_emissions_loc, "scripts", "results_functions.R"))
   source(file.path(co2_emissions_loc, "scripts", "agroforestry_functions.R"))
   source(file.path(co2_emissions_loc, "scripts", "leakage_functions.R"))
   source(file.path(co2_emissions_loc, "scripts", "test_functions.R"))
   source(file.path(soil_loc, "scripts/mongodb_extraction_functions.R"))
-  if (length(farms_everything$farmInfo$farmId)>1){
-    farms_everything = farms_collection$find(paste('{"farmInfo.farmId":"',farmId,'"}',sep=""), limit = 1)
-    log4r::info(my_logger,paste("After multiple matches, only the first profile with farmId = ",farmId," was selected.",sep=""))
-  } 
+
   fuel_object = farms_everything$energyUsage
   livestock = farms_everything$liveStock
   landUseSummaryOrPractices = farms_everything$landUse$landUseSummaryOrPractices
@@ -87,17 +60,6 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
                                  "was pasted to every following years", sep=" "))
   }
   
-  farm_parameters = mongo(collection="farmparameters", db="carbonplus_production_db", url=init_file$connection_string_prod)
-  
-  farm_EnZ =  farm_parameters$find(paste('{"farmId":"',farmId,'"}',sep=""))
-  if (length(unique(farm_EnZ$enz))==1){
-    farm_EnZ = unique(farm_EnZ$enz)
-    log4r::info(my_logger, paste("farmparameters collection contain unique info on EnZ for farmId", farmId, sep=" "))
-  } else if (length(unique(farm_EnZ$enz))==0){
-    log4r::error(my_logger, paste("Caution: farmparameters collection doesn't contain info on EnZ for farmId", farmId, sep=" "))
-  } else if (length(unique(farm_EnZ$enz))>1){
-    log4r::error(my_logger, paste("Caution: farmparameters collection content SEVERAL EnZ for farmId", farmId,"leading to conflicts", sep=" "))
-  }
   ## Read in lca data
   animal_factors <- read_csv(file.path(modelling_data_loc,"data", "carbon_share_manure.csv")) %>% filter(type=="manure") %>% 
     rename(species=manure_source)
