@@ -170,23 +170,23 @@ call_lca <- function(init_file, farms_everything, farm_EnZ){
 
   write_csv(productivity_table, file.path("logs",paste(farmId,"_productivity_table.csv",sep="")))
   write_csv(CO2emissions_detailled_yearly_results, file.path("logs",paste(farmId,"_CO2emissions_detailled_yearly_results.csv",sep="")))
+  
   yearly_aggregated_results = CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
     filter(source!="leakage" & source!="crops_productivity_tCO2eq")%>%
-    summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3)
-  yearly_aggregated_results$leakage_tCO2_eq = (CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
-                                                 filter(source=="leakage")%>%
+    summarise(emissions_tCO2_eq=sum(kgCO2_eq)*1e-3)
+  
+  yearly_aggregated_results$leakage_tCO2_eq <- (CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
+                                                 filter(source=="leakage") %>%
                                                  summarise(leakage_tCO2_eq=kgCO2_eq*1e-3))$leakage_tCO2_eq
   # Fernando: The lines below are not working!!!
   # summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3) # Fernando: what is this line doing here!
   # yearly_aggregated_results$crops_productivity_tCO2eq = (CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
   #                                                filter(source=="crops_productivity_tCO2eq")%>%
   #                                                summarise(leakage_tCO2_eq=kgCO2_eq))$leakage_tCO2_eq
-  yearly_aggregated_results = yearly_aggregated_results %>%
-    mutate(total_emissions_with_leakage_tCO2_eq = 
-             total_emissions_without_leakage_tCO2_eq + leakage_tCO2_eq)
-  yearly_aggregated_results$total_emissions_diff_tCO2_eq <- 
-    round(yearly_aggregated_results$total_emissions_with_leakage_tCO2_eq -
-    yearly_aggregated_results$total_emissions_with_leakage_tCO2_eq[1])
+  
+  yearly_aggregated_results$emissions_diff_tCO2_eq <- 
+    round(yearly_aggregated_results$emissions_tCO2_eq -
+    yearly_aggregated_results$emissions_tCO2_eq[1])
   
   return(yearly_aggregated_results)
 }
