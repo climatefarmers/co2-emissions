@@ -128,10 +128,9 @@ n2o_manure_deposition_indirect <- function( # add non-grazing days
 ){
   if (climate_wet_or_dry == "wet"){ef_4=0.014}
   if (climate_wet_or_dry == "dry"){ef_4=0.005}
-  
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(n2o_urine_dung_indirect = n_animals * n_excretion_rate_kg_1000am * 365 * mass_kg_per_animal/1000 
+      mutate(n2o_urine_dung_indirect = n_animals * n_excretion_rate_kg_1000am * 365 * mass_kg_per_animal/1000 *
                (frac_gasm * ef_4 + frac_leach * ef_5))
   }else{
     warning("No Animal data provided - or included in project")
