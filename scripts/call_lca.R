@@ -91,7 +91,7 @@ call_lca <- function(init_file, farms_everything, farm_EnZ){
   productivity_table = data.frame(year = c(), crop = c(), productivity = c())
   
   years <- seq(0,10) # year sequence
-  scenarios <- c("baseline",paste("year",c(1:10),sep=""))
+  scenarios <- c("baseline",paste0("year", c(1:10)))
   
   # merge in factors into lca data
   for (i in years){
@@ -168,16 +168,17 @@ call_lca <- function(init_file, farms_everything, farm_EnZ){
                                                   all_results)
   }
 
-  write_csv(productivity_table, file.path("logs",paste(farmId,"_productivity_table.csv",sep="")))
-  write_csv(CO2emissions_detailled_yearly_results, file.path("logs",paste(farmId,"_CO2emissions_detailled_yearly_results.csv",sep="")))
+  write_csv(productivity_table, file.path("logs", paste0(farmId,"_productivity_table.csv")))
+  write_csv(CO2emissions_detailled_yearly_results, file.path("logs", paste0(farmId,"_CO2emissions_detailled_yearly_results.csv")))
   
   yearly_aggregated_results = CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
-    filter(source!="leakage" & source!="crops_productivity_tCO2eq")%>%
+    filter(source != "leakage" & source != "crops_productivity_tCO2eq") %>%
     summarise(emissions_tCO2_eq=sum(kgCO2_eq)*1e-3)
   
-  yearly_aggregated_results$leakage_tCO2_eq <- (CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
+  yearly_aggregated_results$leakage_tCO2_eq <- round((CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
                                                  filter(source=="leakage") %>%
-                                                 summarise(leakage_tCO2_eq=kgCO2_eq*1e-3))$leakage_tCO2_eq
+                                                 summarise(leakage_tCO2_eq=kgCO2_eq*1e-3))$leakage_tCO2_eq)
+  
   # Fernando: The lines below are not working!!!
   # summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3) # Fernando: what is this line doing here!
   # yearly_aggregated_results$crops_productivity_tCO2eq = (CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
