@@ -4,7 +4,9 @@
 #### TO DO: include pastures and compst ?? to n2o_n_fixing
 #### TO DO LATER: include n2o_n_fixing & compost import to leakage
 
-run_lca <- function(init_file, farmId=NA, JSONfile=NA){
+call_lca <- function(init_file, farms_everything, farm_EnZ){
+  ## This life cycle analysis function for getting the farm emissions
+  ## is meant to be called by passing it the init_file and farm data directly.
   
   ## Log start running messages
   log4r::info(my_logger, "run_lca.R started running for all scenario.")
@@ -12,68 +14,25 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
   ## Define paths
   soil_loc <-init_file$soil_loc
   co2_emissions_loc <-init_file$co2_emissions_loc
-  modelling_data_loc <- init_file$modelling_data_loc
+  modelling_data_loc <- init_file$soil_loc
   climatic_zone_loc <- init_file$climatic_zone_loc
-  
-  ## Set environmental variables for AWS
-  Sys.setenv(
-    "AWS_ACCESS_KEY_ID" = init_file$AWS_ACCESS_KEY_ID,
-    "AWS_SECRET_ACCESS_KEY" = init_file$AWS_SECRET_ACCESS_KEY,
-    "AWS_DEFAULT_REGION" = init_file$AWS_DEFAULT_REGION
-  )
-  if(is.na(farmId)==TRUE){
-    if(is.na(JSONfile)==TRUE){stop("No farmId neither JSON files were feed to the model")}
-    JSONfile_entered = TRUE
-    farms_everything = fromJSON(JSONfile)
-  }
-  if(is.na(farmId)==FALSE){
-    if(is.na(JSONfile)==FALSE){stop("farmId AND JSON files were feed to the model. Please choose only one.")}
-    #connection_string = init_file$connection_string_prod
-    #farms_collection = mongo(collection="farms", db="carbonplus_production_db", url=init_file$connection_string_prod)
-    farms_collection = mongo(collection="farms", db="carbonplusdb", url=init_file$connection_string_cfdev)
-    farms_everything = farms_collection$find(paste('{"farmInfo.farmId":"',farmId,'"}',sep=""))
-    #checking correctness and unicity
-    if (is.null(farms_everything$farmInfo)==TRUE){
-      log4r::error(my_logger, "farmId wasn't found.")
-    } else if (length(farms_everything$farmInfo$farmId)>1){
-      log4r::error(my_logger, paste("Multiple identical farmId were found. Number of farmId matching =",length(farms_everything$farmInfo$farmId),".",sep=""))
-    } else if (farms_everything$farmInfo$farmId==farmId){
-      log4r::info(my_logger,paste("farm with farmId = ",farmId," has been read succesfully. Mail adress = ",farms_everything$farmInfo$email,'.',sep=""))
-    }
-  }
-  source(file.path(co2_emissions_loc, "scripts", "calc_functions.R"))
-  source(file.path(co2_emissions_loc, "scripts", "results_functions.R"))
-  source(file.path(co2_emissions_loc, "scripts", "agroforestry_functions.R"))
-  source(file.path(co2_emissions_loc, "scripts", "leakage_functions.R"))
-  source(file.path(co2_emissions_loc, "scripts", "test_functions.R"))
-  source(file.path(soil_loc, "scripts/mongodb_extraction_functions.R"))
-  if (length(farms_everything$farmInfo$farmId)>1){
-    farms_everything = farms_collection$find(paste('{"farmInfo.farmId":"',farmId,'"}',sep=""), limit = 1)
-    log4r::info(my_logger,paste("After multiple matches, only the first profile with farmId = ",farmId," was selected.",sep=""))
-  } 
+
+  source(file.path(co2_emissions_loc, "scripts", "calc_functions.R"), local = TRUE)
+  source(file.path(co2_emissions_loc, "scripts", "results_functions.R"), local = TRUE)
+  source(file.path(co2_emissions_loc, "scripts", "agroforestry_functions.R"), local = TRUE)
+  source(file.path(co2_emissions_loc, "scripts", "leakage_functions.R"), local = TRUE)
+  source(file.path(co2_emissions_loc, "scripts", "test_functions.R"), local = TRUE)
+  source(file.path(soil_loc, "scripts/mongodb_extraction_functions.R"), local = TRUE)
+
   fuel_object = farms_everything$energyUsage
   livestock = farms_everything$liveStock
   landUseSummaryOrPractices = farms_everything$landUse$landUseSummaryOrPractices
   soilAnalysis = farms_everything$soilAnalysis
-  if (length(farms_everything$farmInfo$farmId)>1){
-    farms_everything = farms_collection$find(paste('{"farmInfo.farmId":"',farmId,'"}',sep=""), limit = 1)
-    log4r::info(my_logger,paste("After multiple matches, only the first profile with farmId = ",farmId," was selected.",sep=""))
-  } 
   livestock = farms_everything$liveStock
   landUseSummaryOrPractices = farms_everything$landUse$landUseSummaryOrPractices
   soilAnalysis = farms_everything$soilAnalysis
   
-  ## To be implemented
-  if (copy_baseline_to_future_landUse == TRUE){
-    for(i in c(1:10)){landUseSummaryOrPractices[[1]][[paste("year",i,sep="")]]=landUseSummaryOrPractices[[1]][["year0"]]}
-    log4r::info(my_logger, paste("MODIF: EVERY PARCELS: Data from year", 0,
-                                 "was pasted to every following years", sep=" "))
-  }
-  if (copy_baseline_to_future_livestock == TRUE){
-    for(i in c(1:10)){livestock[["futureManagement"]][[1]][[paste("year",i,sep="")]]=livestock[["currentManagement"]][[1]]}
-    log4r::info(my_logger, paste("MODIF: LIVESTICK: Data from year", 0,
-                                 "was pasted to every following years", sep=" "))
-  }
+  ## If TRUE, copies the practice of a single year to all others
   if (copy_yearX_to_following_years_landUse == TRUE){
     #last_year_to_duplicate = 1
     for(i in c(last_year_to_duplicate+1:10)){landUseSummaryOrPractices[[1]][[paste("year",i,sep="")]]=landUseSummaryOrPractices[[1]][[paste("year",last_year_to_duplicate,sep="")]]}
@@ -86,18 +45,7 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
     log4r::info(my_logger, paste("MODIF: LIVESTOCK: Data from year", last_year_to_duplicate,
                                  "was pasted to every following years", sep=" "))
   }
-  
-  farm_parameters = mongo(collection="farmparameters", db="carbonplus_production_db", url=init_file$connection_string_prod)
-  
-  farm_EnZ =  farm_parameters$find(paste('{"farmId":"',farmId,'"}',sep=""))
-  if (length(unique(farm_EnZ$enz))==1){
-    farm_EnZ = unique(farm_EnZ$enz)
-    log4r::info(my_logger, paste("farmparameters collection contain unique info on EnZ for farmId", farmId, sep=" "))
-  } else if (length(unique(farm_EnZ$enz))==0){
-    log4r::error(my_logger, paste("Caution: farmparameters collection doesn't contain info on EnZ for farmId", farmId, sep=" "))
-  } else if (length(unique(farm_EnZ$enz))>1){
-    log4r::error(my_logger, paste("Caution: farmparameters collection content SEVERAL EnZ for farmId", farmId,"leading to conflicts", sep=" "))
-  }
+
   ## Read in lca data
   animal_factors <- read_csv(file.path(modelling_data_loc,"data", "carbon_share_manure.csv")) %>% filter(type=="manure") %>% 
     rename(species=manure_source)
@@ -114,7 +62,7 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
   climate_wet_or_dry <- unique(natural_area_factors$climate_wet_or_dry)
   methane_factors <- read_csv(file.path(modelling_data_loc,"data", "methane_emission_factors.csv")) %>% filter(climate == climate_zone) %>% select(-climate)
   grazing_factors <- read_csv(file.path(modelling_data_loc,"data", "grazing_factors.csv"))
-  
+
   ## Get inputs
   crop_data = get_crop_inputs(landUseSummaryOrPractices, pars)
   crop_data <- get_baseline_crop_inputs(landUseSummaryOrPractices, crop_data, crop_factors, my_logger, farm_EnZ)
@@ -141,9 +89,13 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
   CO2emissions_detailled_yearly_results = data.frame(scenario_selected = c(), source = c(), value = c(), 
                               gas = c(), co2eq_factor = c(), kgCO2_eq = c())
   productivity_table = data.frame(year = c(), crop = c(), productivity = c())
+  
+  years <- seq(0,10) # year sequence
+  scenarios <- c("baseline",paste0("year", c(1:10)))
+  
   # merge in factors into lca data
-  for (scenario_selected in c("baseline",paste("year",c(1:10),sep=""))){
-    
+  for (i in years){
+    scenario_selected <- scenarios[i+1]
     animals <- merge(filter(animal_data, scenario==scenario_selected), animal_factors, by = "species", all.x = TRUE)
     animals <- merge(animals, methane_factors, by = c("species" = "species", "grazing_management" = "grazing_management", "productivity" = "productivity"), all.x = TRUE)
     n_fixing_species_crop <- merge(filter(crop_data, scenario==scenario_selected), crop_factors, by = "crop", all.x = TRUE)
@@ -171,7 +123,6 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
     yearly_productivity <- productivity_crops(crop_data, scenario_selected, farm_EnZ)
     productivity_table <- rbind(productivity_table,
                                 get_yearly_productivity_table(productivity_table, crop_data, scenario_selected, farm_EnZ))
-    
     # Clean Results 
     if (nrow(fertilizers) > 0){
       fertilizer_results <- fertilizers %>% select(fertilizer_type, n2o_fertilizer)}else{
@@ -199,7 +150,7 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
                                                        n2o_manure_deposition = sum(n2o_urine_dung_indirect)+sum(n2o_urine_dung_direct))
     fuel_results_sum <- fuel_results %>% summarise(co2_fuel = sum(co2_fuel))
     crop_results_sum <- crop_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
-    pasture_results_sum <- # not using pasture n fixation # pasture_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
+    # pasture_results_sum <- # not using pasture n fixation # pasture_results %>% summarise(n2o_n_fixing = sum(n2o_n_fixing))
     #n_fixing_sum <- crop_results_sum + pasture_results_sum
     leakage_sum <- leakage %>% summarise(co2_leakage = sum(co2_leakage))
     crops_productivity <- data.frame("co2_crops_productivity_tCO2eq"=c(yearly_productivity))
@@ -212,24 +163,33 @@ run_lca <- function(init_file, farmId=NA, JSONfile=NA){
       left_join(co2eq_factors, by = "gas") %>% 
       mutate(kgCO2_eq = co2eq_factor * value)
     all_results$scenario_selected=scenario_selected
+    all_results$year = i
     CO2emissions_detailled_yearly_results = rbind(CO2emissions_detailled_yearly_results, 
                                                   all_results)
   }
-  write_csv(productivity_table, file.path("logs",paste(farmId,"_productivity_table.csv",sep="")))
-  write_csv(CO2emissions_detailled_yearly_results, file.path("logs",paste(farmId,"_CO2emissions_detailled_yearly_results.csv",sep="")))
-  yearly_aggregated_results = CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
-    filter(source!="leakage" & source!="crops_productivity_tCO2eq")%>%
-    summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3)
-  yearly_aggregated_results$leakage_tCO2_eq = (CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
-                                                 filter(source=="leakage")%>%
-                                                 summarise(leakage_tCO2_eq=kgCO2_eq*1e-3))$leakage_tCO2_eq
-  summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3)
-  yearly_aggregated_results$crops_productivity_tCO2eq = (CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
-                                                 filter(source=="crops_productivity_tCO2eq")%>%
-                                                 summarise(leakage_tCO2_eq=kgCO2_eq))$leakage_tCO2_eq
+
+  write_csv(productivity_table, file.path("logs", paste0(farmId,"_productivity_table.csv")))
+  write_csv(CO2emissions_detailled_yearly_results, file.path("logs", paste0(farmId,"_CO2emissions_detailled_yearly_results.csv")))
+  
+  yearly_aggregated_results = CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
+    filter(source != "leakage" & source != "crops_productivity_tCO2eq") %>%
+    summarise(emissions_tCO2_eq=sum(kgCO2_eq)*1e-3)
+  
+  yearly_aggregated_results$leakage_tCO2_eq <- round((CO2emissions_detailled_yearly_results %>% group_by(year) %>% 
+                                                 filter(source=="leakage") %>%
+                                                 summarise(leakage_tCO2_eq=kgCO2_eq*1e-3))$leakage_tCO2_eq)
+  
+  # Fernando: The lines below are not working!!!
+  # summarise(total_emissions_without_leakage_tCO2_eq=sum(kgCO2_eq)*1e-3) # Fernando: what is this line doing here!
+  # yearly_aggregated_results$crops_productivity_tCO2eq = (CO2emissions_detailled_yearly_results %>% group_by(scenario_selected) %>% 
+  #                                                filter(source=="crops_productivity_tCO2eq")%>%
+  #                                                summarise(leakage_tCO2_eq=kgCO2_eq))$leakage_tCO2_eq
+  
+  yearly_aggregated_results$emissions_diff_tCO2_eq <- 
+    round(yearly_aggregated_results$emissions_tCO2_eq -
+    yearly_aggregated_results$emissions_tCO2_eq[1])
   
   return(yearly_aggregated_results)
-  
 }
 
 

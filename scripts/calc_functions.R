@@ -1,5 +1,6 @@
 # Initial calculations all in kg -> convert to tonnes later
 
+## Calculation: co2 fuel consumption
 co2_fuel_consumption <- function(
   fuel_data
 ){
@@ -13,6 +14,7 @@ co2_fuel_consumption <- function(
   
 }
 
+## Calculation: ch4 enteric fermentation
 ch4_enteric_fermentation <- function(
   animal_data
 ){
@@ -26,7 +28,7 @@ ch4_enteric_fermentation <- function(
   
 }
 
-ch4_manure_deposition <- function(
+ch4_manure_deposition <- function( #ARE EVERY SPECIES LINKED TO A ef_methane_kg_head ?
   animal_data
 ){
   if(nrow(animal_data) > 0){
@@ -108,7 +110,7 @@ n2o_fertilizer <- function(
   
   if(nrow(fertilizer_data) > 0){
     fertilizer_data <- fertilizer_data %>% 
-      mutate(n2o_fertilizer = quantity_kg_ha * field_area * n_content * (1 - volatile_fraction) * ef_fertilizer * (44/28))
+      mutate(n2o_fertilizer = quantity_t_ha*1e3 *  n_content_perc/100 * (1 - volatile_fraction) * ef_fertilizer * (44/28))
   }else{
     warning("No Fertilizer data provided - or included in project")
   }
@@ -126,10 +128,9 @@ n2o_manure_deposition_indirect <- function( # add non-grazing days
 ){
   if (climate_wet_or_dry == "wet"){ef_4=0.014}
   if (climate_wet_or_dry == "dry"){ef_4=0.005}
-  
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(n2o_urine_dung_indirect = n_animals * grazing_days/365 * n_excretion_rate_kg_1000am * 365 * mass/1000 * 
+      mutate(n2o_urine_dung_indirect = n_animals * n_excretion_rate_kg_1000am * 365 * mass_kg_per_animal/1000 *
                (frac_gasm * ef_4 + frac_leach * ef_5))
   }else{
     warning("No Animal data provided - or included in project")
@@ -147,7 +148,7 @@ n2o_manure_deposition_direct <- function(
   if (climate_wet_or_dry == "dry"){ef_3_pasture=0.002}
   if(nrow(animal_data) > 0){
     animal_data <- animal_data %>% 
-      mutate(n2o_urine_dung_direct = n_animals * n_excretion_rate_kg_1000am * mass/1000 * 
+      mutate(n2o_urine_dung_direct = n_animals * n_excretion_rate_kg_1000am * mass_kg_per_animal/1000 * 
                (grazing_days * ef_3_pasture + (365 - grazing_days)*ef_3_deep_bedding))
   }else{
     warning("No Animal data provided - or included in project")
